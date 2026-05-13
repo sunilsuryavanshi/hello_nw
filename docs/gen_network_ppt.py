@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Generate Network Architecture PowerPoint Presentation
-Output: Five9_Genesys_Bridge_Executive_v1.pptx
+Generate Visio-style network architecture PowerPoint presentation.
+Five9/Genesys Bridge - GCP Dedicated Interconnect Architecture
 """
 
 from pptx import Presentation
@@ -9,56 +9,73 @@ from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
-import os
+from pptx.enum.dml import MSO_THEME_COLOR
+import copy
 
-# Colors
+# ============================================================
+# COLOR SCHEME
+# ============================================================
 DARK_BLUE = RGBColor(0x1B, 0x2A, 0x4A)
 MEDIUM_BLUE = RGBColor(0x2C, 0x5F, 0x8A)
 LIGHT_BLUE = RGBColor(0x4A, 0x90, 0xD9)
 ORANGE = RGBColor(0xE8, 0x6C, 0x00)
 GREEN = RGBColor(0x28, 0xA7, 0x45)
 GCP_BLUE = RGBColor(0x42, 0x85, 0xF4)
+GCP_GREEN = RGBColor(0x34, 0xA8, 0x53)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 LIGHT_GRAY = RGBColor(0xF0, 0xF2, 0xF5)
 DARK_GRAY = RGBColor(0x4A, 0x4A, 0x4A)
+RED = RGBColor(0xDC, 0x35, 0x45)
 
-# Presentation setup
-prs = Presentation()
-prs.slide_width = Inches(13.333)
-prs.slide_height = Inches(7.5)
+# Slide dimensions
+SLIDE_WIDTH = Inches(13.333)
+SLIDE_HEIGHT = Inches(7.5)
+
+OUTPUT_PATH = "/projects/sandbox/hello_nw/docs/Five9_Genesys_Bridge_Executive_v1.pptx"
 
 
-def add_colored_box(slide, left, top, width, height, fill_color, text="",
-                    font_size=12, font_color=WHITE, bold=False, border_color=None):
-    """Add a colored rectangle with optional text."""
-    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
+def set_slide_bg(slide, color):
+    """Set solid background color for a slide."""
+    bg = slide.background
+    fill = bg.fill
+    fill.solid()
+    fill.fore_color.rgb = color
+
+
+def add_shape_box(slide, left, top, width, height, fill_color, text="",
+                  font_size=10, font_color=WHITE, bold=False, shape_type=MSO_SHAPE.ROUNDED_RECTANGLE,
+                  border_color=None, border_width=Pt(1), text_align=PP_ALIGN.CENTER):
+    """Add a shape box with text."""
+    shape = slide.shapes.add_shape(shape_type, left, top, width, height)
     shape.fill.solid()
     shape.fill.fore_color.rgb = fill_color
     if border_color:
         shape.line.color.rgb = border_color
-        shape.line.width = Pt(2)
+        shape.line.width = border_width
     else:
         shape.line.fill.background()
+
+    tf = shape.text_frame
+    tf.word_wrap = True
+    tf.auto_size = None
+    tf.margin_left = Pt(4)
+    tf.margin_right = Pt(4)
+    tf.margin_top = Pt(2)
+    tf.margin_bottom = Pt(2)
+
     if text:
-        tf = shape.text_frame
-        tf.word_wrap = True
-        tf.margin_left = Pt(6)
-        tf.margin_right = Pt(6)
-        tf.margin_top = Pt(4)
-        tf.margin_bottom = Pt(4)
         p = tf.paragraphs[0]
-        p.alignment = PP_ALIGN.CENTER
+        p.alignment = text_align
         run = p.add_run()
         run.text = text
         run.font.size = Pt(font_size)
         run.font.color.rgb = font_color
         run.font.bold = bold
-        tf.paragraphs[0].space_before = Pt(0)
-        tf.paragraphs[0].space_after = Pt(0)
+
     return shape
 
 
-def add_text_box(slide, left, top, width, height, text, font_size=14,
+def add_text_box(slide, left, top, width, height, text, font_size=10,
                  font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.LEFT):
     """Add a text box."""
     txBox = slide.shapes.add_textbox(left, top, width, height)
@@ -74,637 +91,680 @@ def add_text_box(slide, left, top, width, height, text, font_size=14,
     return txBox
 
 
-def add_arrow_line(slide, start_left, start_top, end_left, end_top, color=DARK_GRAY, width=Pt(2)):
-    """Add a connector line (arrow)."""
-    connector = slide.shapes.add_connector(1, start_left, start_top, end_left, end_top)
+def add_connector(slide, start_x, start_y, end_x, end_y, color=DARK_GRAY, width=Pt(1.5)):
+    """Add a connector line between two points."""
+    connector = slide.shapes.add_connector(
+        1,  # straight connector
+        start_x, start_y, end_x, end_y
+    )
     connector.line.color.rgb = color
     connector.line.width = width
     return connector
 
 
-def set_slide_bg(slide, color):
-    """Set slide background color."""
-    background = slide.background
-    fill = background.fill
-    fill.solid()
-    fill.fore_color.rgb = color
-
-
-def add_slide_title(slide, title_text, subtitle_text=None):
-    """Add a standard slide title bar."""
-    # Title bar
-    title_bar = slide.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE,
-        Inches(0), Inches(0), Inches(13.333), Inches(1.0)
-    )
-    title_bar.fill.solid()
-    title_bar.fill.fore_color.rgb = DARK_BLUE
-    title_bar.line.fill.background()
-    tf = title_bar.text_frame
-    tf.margin_left = Pt(30)
-    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-    p = tf.paragraphs[0]
-    run = p.add_run()
-    run.text = title_text
-    run.font.size = Pt(28)
-    run.font.color.rgb = WHITE
-    run.font.bold = True
-    if subtitle_text:
-        p2 = tf.add_paragraph()
-        run2 = p2.add_run()
-        run2.text = subtitle_text
-        run2.font.size = Pt(14)
-        run2.font.color.rgb = LIGHT_GRAY
-
-
+def add_multiline_textbox(slide, left, top, width, height, lines, font_size=9,
+                          font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.LEFT):
+    """Add a text box with multiple lines."""
+    txBox = slide.shapes.add_textbox(left, top, width, height)
+    tf = txBox.text_frame
+    tf.word_wrap = True
+    for i, line in enumerate(lines):
+        if i == 0:
+            p = tf.paragraphs[0]
+        else:
+            p = tf.add_paragraph()
+        p.alignment = alignment
+        run = p.add_run()
+        run.text = line
+        run.font.size = Pt(font_size)
+        run.font.color.rgb = font_color
+        run.font.bold = bold
+    return txBox
 
 
 # ============================================================
 # SLIDE 1: Title Slide
 # ============================================================
-slide1 = prs.slides.add_slide(prs.slide_layouts[6])  # Blank layout
-set_slide_bg(slide1, DARK_BLUE)
+def create_slide_1(prs):
+    """Title slide with dark blue background."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])  # Blank layout
+    set_slide_bg(slide, DARK_BLUE)
 
-# Main title
-add_text_box(slide1, Inches(1), Inches(1.8), Inches(11.333), Inches(1.5),
-             "Network Architecture: GCP Dedicated Interconnect",
-             font_size=36, font_color=WHITE, bold=True, alignment=PP_ALIGN.CENTER)
+    # Main title
+    add_text_box(slide, Inches(1), Inches(2.0), Inches(11.333), Inches(1.2),
+                 "Network Architecture: GCP Dedicated Interconnect",
+                 font_size=36, font_color=WHITE, bold=True, alignment=PP_ALIGN.CENTER)
 
-# Subtitle
-add_text_box(slide1, Inches(1), Inches(3.3), Inches(11.333), Inches(0.8),
-             "Voice & Data Private Connectivity for Contact Center AI",
-             font_size=22, font_color=LIGHT_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
+    # Subtitle
+    add_text_box(slide, Inches(1), Inches(3.4), Inches(11.333), Inches(0.8),
+                 "Dual DC (Dallas + Phoenix) | Private Voice & Data Connectivity",
+                 font_size=20, font_color=LIGHT_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Bottom info
-add_text_box(slide1, Inches(1), Inches(4.5), Inches(11.333), Inches(0.6),
-             "Dual DC (Dallas + Phoenix) | 99.99% SLA | < 80ms Voice Latency",
-             font_size=16, font_color=LIGHT_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+    # Specs line
+    add_text_box(slide, Inches(1), Inches(4.5), Inches(11.333), Inches(0.6),
+                 "99.99% SLA | < 80ms Voice Latency | 10 Gbps Dedicated",
+                 font_size=16, font_color=LIGHT_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Accent line
-accent_line = slide1.shapes.add_shape(
-    MSO_SHAPE.RECTANGLE, Inches(4), Inches(4.2), Inches(5.333), Pt(4)
-)
-accent_line.fill.solid()
-accent_line.fill.fore_color.rgb = LIGHT_BLUE
-accent_line.line.fill.background()
+    # Decorative line
+    add_shape_box(slide, Inches(3), Inches(4.2), Inches(7.333), Inches(0.03),
+                  LIGHT_BLUE, shape_type=MSO_SHAPE.RECTANGLE)
 
-# Bottom bar
-bottom_bar = slide1.shapes.add_shape(
-    MSO_SHAPE.RECTANGLE, Inches(0), Inches(6.9), Inches(13.333), Inches(0.6)
-)
-bottom_bar.fill.solid()
-bottom_bar.fill.fore_color.rgb = MEDIUM_BLUE
-bottom_bar.line.fill.background()
-tf = bottom_bar.text_frame
-tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-tf.margin_left = Pt(30)
-p = tf.paragraphs[0]
-p.alignment = PP_ALIGN.CENTER
-run = p.add_run()
-run.text = "Five9 IVR  |  GCP CCAI  |  Genesys Cloud Agent Desktop"
-run.font.size = Pt(14)
-run.font.color.rgb = WHITE
+    return slide
 
-print("Slide 1: Title - Done")
+
+# ============================================================
+# SLIDE 2: Physical Network Topology
+# ============================================================
+def create_slide_2(prs):
+    """Physical Network Topology - Dual DC to GCP (Visio-style)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
+
+    # Title bar
+    add_shape_box(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.7),
+                  DARK_BLUE, "Physical Network Topology - Dual DC to GCP",
+                  font_size=18, font_color=WHITE, bold=True)
+
+    # ---- LEFT ZONE: On-Premises ----
+    # Dallas DC container
+    add_shape_box(slide, Inches(0.3), Inches(1.0), Inches(2.8), Inches(2.6),
+                  LIGHT_GRAY, "", border_color=DARK_BLUE, border_width=Pt(2),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(0.4), Inches(1.05), Inches(2.6), Inches(0.35),
+                 "Dallas DC (Primary)", font_size=10, font_color=DARK_BLUE, bold=True)
+
+    # Dallas SBC
+    add_shape_box(slide, Inches(0.5), Inches(1.5), Inches(2.4), Inches(0.7),
+                  MEDIUM_BLUE, "Oracle SBC (HA)", font_size=9, font_color=WHITE, bold=True)
+    # Dallas Genesys
+    add_shape_box(slide, Inches(0.5), Inches(2.4), Inches(2.4), Inches(0.7),
+                  GREEN, "Genesys SIP/ORS", font_size=9, font_color=WHITE, bold=True)
+
+    # Phoenix DC container
+    add_shape_box(slide, Inches(0.3), Inches(4.0), Inches(2.8), Inches(2.6),
+                  LIGHT_GRAY, "", border_color=DARK_BLUE, border_width=Pt(2),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(0.4), Inches(4.05), Inches(2.6), Inches(0.35),
+                 "Phoenix DC (DR)", font_size=10, font_color=DARK_BLUE, bold=True)
+
+    # Phoenix SBC
+    add_shape_box(slide, Inches(0.5), Inches(4.5), Inches(2.4), Inches(0.7),
+                  MEDIUM_BLUE, "Oracle SBC (DR)", font_size=9, font_color=WHITE, bold=True)
+    # Phoenix Genesys
+    add_shape_box(slide, Inches(0.5), Inches(5.4), Inches(2.4), Inches(0.7),
+                  GREEN, "Genesys DR", font_size=9, font_color=WHITE, bold=True)
+
+    # ---- MIDDLE ZONE: Interconnect ----
+    # Equinix DA7
+    add_shape_box(slide, Inches(4.2), Inches(1.3), Inches(1.8), Inches(0.65),
+                  DARK_GRAY, "Equinix DA7", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(4.2), Inches(1.95), Inches(1.8), Inches(0.3),
+                 "10G Ded.", font_size=8, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # Equinix DA2
+    add_shape_box(slide, Inches(4.2), Inches(2.5), Inches(1.8), Inches(0.65),
+                  DARK_GRAY, "Equinix DA2", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(4.2), Inches(3.15), Inches(1.8), Inches(0.3),
+                 "10G Ded.", font_size=8, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # Equinix PH1
+    add_shape_box(slide, Inches(4.2), Inches(4.3), Inches(1.8), Inches(0.65),
+                  DARK_GRAY, "Equinix PH1", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(4.2), Inches(4.95), Inches(1.8), Inches(0.3),
+                 "10G Ded.", font_size=8, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # DataBank PHX1
+    add_shape_box(slide, Inches(4.2), Inches(5.5), Inches(1.8), Inches(0.65),
+                  DARK_GRAY, "DataBank PHX1", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(4.2), Inches(6.15), Inches(1.8), Inches(0.3),
+                 "10G Ded.", font_size=8, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # Dark Fiber labels
+    add_text_box(slide, Inches(3.2), Inches(0.85), Inches(1.2), Inches(0.3),
+                 "AT&T Dark Fiber", font_size=7, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+    add_text_box(slide, Inches(3.2), Inches(3.7), Inches(1.4), Inches(0.3),
+                 "Verizon Dark Fiber", font_size=7, font_color=DARK_GRAY, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # ---- RIGHT ZONE: GCP ----
+    # GCP us-south1 container
+    add_shape_box(slide, Inches(7.2), Inches(1.0), Inches(4.0), Inches(3.5),
+                  RGBColor(0xE8, 0xF0, 0xFE), "", border_color=GCP_BLUE, border_width=Pt(2),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    add_text_box(slide, Inches(7.3), Inches(1.05), Inches(3.8), Inches(0.35),
+                 "GCP us-south1 (Dallas)", font_size=10, font_color=GCP_BLUE, bold=True)
+
+    add_shape_box(slide, Inches(7.4), Inches(1.5), Inches(3.6), Inches(0.55),
+                  GCP_BLUE, "Cloud Router / BGP", font_size=9, font_color=WHITE, bold=True)
+    add_shape_box(slide, Inches(7.4), Inches(2.2), Inches(3.6), Inches(0.55),
+                  GCP_BLUE, "GTP (Voice)", font_size=9, font_color=WHITE, bold=True)
+    add_shape_box(slide, Inches(7.4), Inches(2.9), Inches(3.6), Inches(0.55),
+                  GCP_BLUE, "Dialogflow CX", font_size=9, font_color=WHITE, bold=True)
+    add_shape_box(slide, Inches(7.4), Inches(3.6), Inches(3.6), Inches(0.55),
+                  GCP_GREEN, "Cloud Run (API)", font_size=9, font_color=WHITE, bold=True)
+
+    # GCP us-central1 (DR)
+    add_shape_box(slide, Inches(7.2), Inches(4.8), Inches(4.0), Inches(1.2),
+                  RGBColor(0xE8, 0xF0, 0xEE), "", border_color=GCP_GREEN, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    add_text_box(slide, Inches(7.3), Inches(4.85), Inches(3.8), Inches(0.35),
+                 "GCP us-central1 (DR)", font_size=10, font_color=GCP_GREEN, bold=True)
+    add_shape_box(slide, Inches(7.4), Inches(5.3), Inches(3.6), Inches(0.5),
+                  RGBColor(0xAA, 0xCC, 0xAA), "DR Replicas (Standby)", font_size=8, font_color=DARK_GRAY)
+
+    # Five9 Cloud (TOP)
+    add_shape_box(slide, Inches(0.5), Inches(0.75), Inches(1.8), Inches(0.5),
+                  ORANGE, "Five9 Cloud", font_size=9, font_color=WHITE, bold=True,
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+
+    # Connectors: Dallas DC to Equinix
+    add_connector(slide, Inches(3.1), Inches(1.85), Inches(4.2), Inches(1.6), ORANGE, Pt(2))
+    add_connector(slide, Inches(3.1), Inches(1.85), Inches(4.2), Inches(2.8), LIGHT_BLUE, Pt(1.5))
+
+    # Phoenix DC to Equinix
+    add_connector(slide, Inches(3.1), Inches(4.85), Inches(4.2), Inches(4.6), ORANGE, Pt(2))
+    add_connector(slide, Inches(3.1), Inches(5.75), Inches(4.2), Inches(5.8), LIGHT_BLUE, Pt(1.5))
+
+    # Equinix to GCP
+    add_connector(slide, Inches(6.0), Inches(1.6), Inches(7.2), Inches(1.75), GCP_BLUE, Pt(2))
+    add_connector(slide, Inches(6.0), Inches(2.8), Inches(7.2), Inches(2.5), GCP_BLUE, Pt(2))
+    add_connector(slide, Inches(6.0), Inches(4.6), Inches(7.2), Inches(5.0), GCP_GREEN, Pt(1.5))
+    add_connector(slide, Inches(6.0), Inches(5.8), Inches(7.2), Inches(5.4), GCP_GREEN, Pt(1.5))
+
+    # Five9 to SBC
+    add_connector(slide, Inches(1.4), Inches(1.25), Inches(1.4), Inches(1.5), ORANGE, Pt(2))
+
+    # Connector labels
+    add_text_box(slide, Inches(6.1), Inches(1.3), Inches(1.1), Inches(0.25),
+                 "10 Gbps", font_size=7, font_color=GCP_BLUE, bold=True, alignment=PP_ALIGN.CENTER)
+    add_text_box(slide, Inches(6.1), Inches(2.6), Inches(1.1), Inches(0.25),
+                 "SIP TLS", font_size=7, font_color=GCP_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
+    add_text_box(slide, Inches(6.1), Inches(4.4), Inches(1.1), Inches(0.25),
+                 "SRTP", font_size=7, font_color=GCP_GREEN, bold=False, alignment=PP_ALIGN.CENTER)
+
+    # Legend
+    add_shape_box(slide, Inches(0.3), Inches(6.8), Inches(12.7), Inches(0.55),
+                  RGBColor(0xFA, 0xFA, 0xFA), "", border_color=DARK_GRAY, border_width=Pt(0.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    # Legend items
+    add_shape_box(slide, Inches(0.5), Inches(6.92), Inches(0.6), Inches(0.06),
+                  ORANGE, "", shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(1.15), Inches(6.85), Inches(1.2), Inches(0.3),
+                 "Voice Path", font_size=8, font_color=DARK_GRAY, bold=False)
+
+    add_shape_box(slide, Inches(2.8), Inches(6.92), Inches(0.6), Inches(0.06),
+                  LIGHT_BLUE, "", shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(3.45), Inches(6.85), Inches(1.2), Inches(0.3),
+                 "Data Path", font_size=8, font_color=DARK_GRAY, bold=False)
+
+    add_shape_box(slide, Inches(5.2), Inches(6.92), Inches(0.6), Inches(0.06),
+                  DARK_GRAY, "", shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(5.85), Inches(6.85), Inches(1.8), Inches(0.3),
+                 "Dark Fiber (dashed)", font_size=8, font_color=DARK_GRAY, bold=False)
+
+    return slide
 
 
 
 # ============================================================
-# SLIDE 2: Architecture Overview
+# SLIDE 3: Voice Path Network Diagram
 # ============================================================
-slide2 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide2, WHITE)
-add_slide_title(slide2, "Network Topology Overview")
+def create_slide_3(prs):
+    """Voice Path: Detailed Network Flow (Visio-style)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
 
-# Define boxes for architecture components
-# Row 1: Data Centers
-add_colored_box(slide2, Inches(0.5), Inches(1.5), Inches(1.8), Inches(1.0),
-                MEDIUM_BLUE, "Dallas DC\n(Primary)", font_size=11, font_color=WHITE, bold=True)
-add_colored_box(slide2, Inches(0.5), Inches(3.0), Inches(1.8), Inches(1.0),
-                MEDIUM_BLUE, "Phoenix DC\n(DR)", font_size=11, font_color=WHITE, bold=True)
+    # Title bar
+    add_shape_box(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.7),
+                  DARK_BLUE, "Voice Path: Detailed Network Flow",
+                  font_size=18, font_color=WHITE, bold=True)
 
-# Equinix Facilities
-add_colored_box(slide2, Inches(3.2), Inches(1.3), Inches(1.8), Inches(0.7),
-                DARK_GRAY, "Equinix DA7", font_size=10, font_color=WHITE, bold=True)
-add_colored_box(slide2, Inches(3.2), Inches(2.1), Inches(1.8), Inches(0.7),
-                DARK_GRAY, "Equinix DA2", font_size=10, font_color=WHITE, bold=True)
-add_colored_box(slide2, Inches(3.2), Inches(3.0), Inches(1.8), Inches(0.7),
-                DARK_GRAY, "Equinix PH1", font_size=10, font_color=WHITE, bold=True)
+    # Flow elements - left to right
+    y_center = Inches(3.0)
+    box_h = Inches(0.9)
+    box_w = Inches(1.6)
+    gap = Inches(0.15)
 
-# GCP Regions
-add_colored_box(slide2, Inches(5.8), Inches(1.5), Inches(2.2), Inches(1.0),
-                GCP_BLUE, "GCP\nus-south1\n(Dallas)", font_size=10, font_color=WHITE, bold=True)
-add_colored_box(slide2, Inches(5.8), Inches(3.0), Inches(2.2), Inches(1.0),
-                GCP_BLUE, "GCP\nus-central1\n(Iowa/DR)", font_size=10, font_color=WHITE, bold=True)
+    # 1. Caller
+    add_shape_box(slide, Inches(0.2), Inches(2.7), Inches(1.1), Inches(0.8),
+                  DARK_GRAY, "Caller", font_size=9, font_color=WHITE, bold=True,
+                  shape_type=MSO_SHAPE.OVAL)
 
-# Five9 Cloud
-add_colored_box(slide2, Inches(9.0), Inches(2.0), Inches(2.0), Inches(1.2),
-                ORANGE, "Five9\nCloud IVR", font_size=11, font_color=WHITE, bold=True)
+    # 2. PSTN
+    add_shape_box(slide, Inches(1.6), Inches(2.6), Inches(1.3), Inches(1.0),
+                  RGBColor(0x88, 0x88, 0x88), "PSTN", font_size=9, font_color=WHITE, bold=True,
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
 
-# Genesys
-add_colored_box(slide2, Inches(11.3), Inches(2.0), Inches(1.8), Inches(1.2),
-                GREEN, "Genesys\nCloud CX", font_size=11, font_color=WHITE, bold=True)
+    # 3. Oracle SBC
+    add_shape_box(slide, Inches(3.2), Inches(2.55), Inches(1.5), Inches(1.1),
+                  MEDIUM_BLUE, "Oracle SBC", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(3.2), Inches(3.65), Inches(1.5), Inches(0.3),
+                 "SIP/RTP Ingress", font_size=7, font_color=MEDIUM_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Connection labels
-add_text_box(slide2, Inches(2.3), Inches(1.1), Inches(1.0), Inches(0.4),
-             "10G", font_size=9, font_color=DARK_GRAY, bold=True)
-add_text_box(slide2, Inches(4.9), Inches(1.1), Inches(1.2), Inches(0.4),
-             "10G Dedicated", font_size=9, font_color=DARK_GRAY, bold=True)
+    # 4. Dedicated Interconnect (thick)
+    add_shape_box(slide, Inches(5.0), Inches(2.8), Inches(1.8), Inches(0.6),
+                  DARK_BLUE, "Dedicated Interconnect", font_size=8, font_color=WHITE, bold=True,
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(5.0), Inches(3.4), Inches(1.8), Inches(0.4),
+                 "10G | VLAN 100 | < 2ms", font_size=7, font_color=DARK_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Legend
-add_text_box(slide2, Inches(0.5), Inches(4.8), Inches(2.0), Inches(0.4),
-             "Legend:", font_size=12, font_color=DARK_GRAY, bold=True)
+    # 5. GCP GTP
+    add_shape_box(slide, Inches(7.1), Inches(2.55), Inches(1.5), Inches(1.1),
+                  GCP_BLUE, "GCP GTP", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(7.1), Inches(3.65), Inches(1.5), Inches(0.4),
+                 "SIP TLS 5061\n+ SRTP", font_size=7, font_color=GCP_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Voice path legend
-voice_legend = slide2.shapes.add_shape(
-    MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(5.2), Inches(0.8), Pt(12)
-)
-voice_legend.fill.solid()
-voice_legend.fill.fore_color.rgb = ORANGE
-voice_legend.line.fill.background()
-add_text_box(slide2, Inches(1.4), Inches(5.1), Inches(2.0), Inches(0.4),
-             "Voice Path (SIP/RTP)", font_size=10, font_color=DARK_GRAY)
+    # 6. Dialogflow CX / CCAI
+    add_shape_box(slide, Inches(8.9), Inches(2.55), Inches(1.8), Inches(1.1),
+                  GCP_BLUE, "Dialogflow CX\n/ CCAI", font_size=9, font_color=WHITE, bold=True)
+    add_text_box(slide, Inches(8.9), Inches(3.65), Inches(1.8), Inches(0.4),
+                 "STT > NLU > TTS\n50-100ms", font_size=7, font_color=GCP_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
-# Data path legend
-data_legend = slide2.shapes.add_shape(
-    MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(5.6), Inches(0.8), Pt(12)
-)
-data_legend.fill.solid()
-data_legend.fill.fore_color.rgb = LIGHT_BLUE
-data_legend.line.fill.background()
-add_text_box(slide2, Inches(1.4), Inches(5.5), Inches(2.0), Inches(0.4),
-             "Data Path (HTTPS)", font_size=10, font_color=DARK_GRAY)
+    # Connectors (orange voice path)
+    add_connector(slide, Inches(1.3), Inches(3.1), Inches(1.6), Inches(3.1), ORANGE, Pt(2.5))
+    add_connector(slide, Inches(2.9), Inches(3.1), Inches(3.2), Inches(3.1), ORANGE, Pt(2.5))
+    add_connector(slide, Inches(4.7), Inches(3.1), Inches(5.0), Inches(3.1), ORANGE, Pt(2.5))
+    add_connector(slide, Inches(6.8), Inches(3.1), Inches(7.1), Inches(3.1), ORANGE, Pt(2.5))
+    add_connector(slide, Inches(8.6), Inches(3.1), Inches(8.9), Inches(3.1), ORANGE, Pt(2.5))
 
-# Architecture notes
-notes_text = ("• Dallas DC & Phoenix DC connect to Equinix meet-me rooms\n"
-              "• 10 Gbps Dedicated Interconnect to GCP regions\n"
-              "• Five9 IVR connects via GCP backbone\n"
-              "• Genesys receives calls post-AI processing")
-add_text_box(slide2, Inches(5.8), Inches(4.6), Inches(7.0), Inches(2.5),
-             notes_text, font_size=11, font_color=DARK_GRAY)
+    # Return path (below)
+    add_shape_box(slide, Inches(1.0), Inches(4.5), Inches(10.5), Inches(0.6),
+                  RGBColor(0xFF, 0xF3, 0xE0), "", border_color=ORANGE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    add_text_box(slide, Inches(1.2), Inches(4.55), Inches(10.0), Inches(0.5),
+                 "Return: GTP \u2192 Interconnect \u2192 SBC \u2192 Genesys SIP \u2192 Agent Desktop",
+                 font_size=9, font_color=ORANGE, bold=True, alignment=PP_ALIGN.CENTER)
 
-print("Slide 2: Architecture Overview - Done")
+    # Return arrows
+    add_connector(slide, Inches(10.7), Inches(3.65), Inches(10.7), Inches(4.5), ORANGE, Pt(1.5))
+    add_connector(slide, Inches(1.0), Inches(4.5), Inches(1.0), Inches(3.65), ORANGE, Pt(1.5))
 
+    # Specs box at bottom
+    add_shape_box(slide, Inches(0.5), Inches(5.5), Inches(12.3), Inches(1.2),
+                  RGBColor(0xF8, 0xF9, 0xFA), "", border_color=MEDIUM_BLUE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    specs_lines = [
+        "Voice Path Specifications:",
+        "Codec: G.711u (64kbps) | Encryption: TLS + SRTP | Latency: < 80ms one-way | QoS: DSCP EF (46)"
+    ]
+    add_multiline_textbox(slide, Inches(0.8), Inches(5.7), Inches(11.8), Inches(0.9),
+                          specs_lines, font_size=10, font_color=DARK_BLUE, bold=True,
+                          alignment=PP_ALIGN.CENTER)
 
-
-# ============================================================
-# SLIDE 3: GCP Region Selection
-# ============================================================
-slide3 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide3, WHITE)
-add_slide_title(slide3, "GCP Region Selection")
-
-# Primary Region Box
-add_colored_box(slide3, Inches(0.5), Inches(1.4), Inches(6.0), Inches(2.8),
-                LIGHT_GRAY, "", border_color=GCP_BLUE)
-add_text_box(slide3, Inches(0.8), Inches(1.5), Inches(5.5), Inches(0.5),
-             "PRIMARY: us-south1 (Dallas)", font_size=18, font_color=GCP_BLUE, bold=True)
-add_text_box(slide3, Inches(0.8), Inches(2.1), Inches(5.5), Inches(2.0),
-             ("• Latency: < 2ms (same metro as Dallas DC)\n"
-              "• Role: Primary CCAI processing\n"
-              "• Interconnect: DA7 + DA2 (dual path)\n"
-              "• Services: Dialogflow CX, Cloud Run,\n"
-              "  Speech-to-Text, Text-to-Speech, Firestore"),
-             font_size=13, font_color=DARK_GRAY)
-
-# DR Region Box
-add_colored_box(slide3, Inches(7.0), Inches(1.4), Inches(6.0), Inches(2.8),
-                LIGHT_GRAY, "", border_color=MEDIUM_BLUE)
-add_text_box(slide3, Inches(7.3), Inches(1.5), Inches(5.5), Inches(0.5),
-             "DR: us-central1 (Iowa)", font_size=18, font_color=MEDIUM_BLUE, bold=True)
-add_text_box(slide3, Inches(7.3), Inches(2.1), Inches(5.5), Inches(2.0),
-             ("• Latency: 15-20ms from Phoenix DC\n"
-              "• Role: Disaster Recovery\n"
-              "• Interconnect: PH1 + PHX1 (dual path)\n"
-              "• Services: Full CCAI stack (replicated)\n"
-              "• Activation: < 30 second failover"),
-             font_size=13, font_color=DARK_GRAY)
-
-# Key Services Section
-add_text_box(slide3, Inches(0.5), Inches(4.6), Inches(12.5), Inches(0.5),
-             "Key GCP Services Available in Both Regions:", font_size=16, font_color=DARK_BLUE, bold=True)
-
-services = [
-    ("Dialogflow CX", GCP_BLUE),
-    ("Cloud Run", GCP_BLUE),
-    ("Speech-to-Text", GCP_BLUE),
-    ("Text-to-Speech", GCP_BLUE),
-    ("Firestore", GCP_BLUE),
-    ("BigQuery", GCP_BLUE),
-]
-x_pos = 0.5
-for svc, color in services:
-    add_colored_box(slide3, Inches(x_pos), Inches(5.2), Inches(1.9), Inches(0.6),
-                    color, svc, font_size=10, font_color=WHITE, bold=True)
-    x_pos += 2.1
-
-print("Slide 3: GCP Region Selection - Done")
+    return slide
 
 
 
 # ============================================================
-# SLIDE 4: Interconnect Design
+# SLIDE 4: Data Path Network Diagram
 # ============================================================
-slide4 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide4, WHITE)
-add_slide_title(slide4, "Dedicated Interconnect: 99.99% Redundancy")
+def create_slide_4(prs):
+    """Data Path: Private API Connectivity (Visio-style)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
 
-# 4 Connection boxes
-connections = [
-    ("DA7 (AT&T)", "Dallas Metro", "Primary Path A"),
-    ("DA2 (Verizon)", "Dallas Metro", "Primary Path B"),
-    ("PH1 (AT&T)", "Phoenix Metro", "DR Path A"),
-    ("PHX1 (Verizon)", "Phoenix Metro", "DR Path B"),
-]
+    # Title bar
+    add_shape_box(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.7),
+                  DARK_BLUE, "Data Path: Private API Connectivity",
+                  font_size=18, font_color=WHITE, bold=True)
 
-y_pos = 1.4
-for facility, metro, path_label in connections:
-    # Facility box
-    add_colored_box(slide4, Inches(0.5), Inches(y_pos), Inches(2.5), Inches(0.9),
-                    DARK_GRAY, f"{facility}\n{metro}", font_size=11, font_color=WHITE, bold=True)
-    # Arrow area - specs
-    add_text_box(slide4, Inches(3.2), Inches(y_pos), Inches(4.0), Inches(0.9),
-                 f"── 10 Gbps ──  VLAN 100 (Voice) + VLAN 200 (Data)  ──▶",
-                 font_size=10, font_color=DARK_GRAY)
-    # GCP target box
-    region = "us-south1" if "DA" in facility else "us-central1"
-    add_colored_box(slide4, Inches(7.5), Inches(y_pos), Inches(2.2), Inches(0.9),
-                    GCP_BLUE, f"GCP\n{region}", font_size=11, font_color=WHITE, bold=True)
-    # Path label
-    add_text_box(slide4, Inches(10.0), Inches(y_pos + 0.1), Inches(2.5), Inches(0.5),
-                 path_label, font_size=11, font_color=MEDIUM_BLUE, bold=True)
-    y_pos += 1.2
+    # Flow elements - left to right
+    y_top = Inches(2.5)
+    box_h = Inches(1.0)
 
-# BGP & BFD Details
-details_y = 6.0
-add_text_box(slide4, Inches(0.5), Inches(details_y), Inches(12.5), Inches(1.0),
-             ("BGP: Customer ASN 64512 ↔ Google ASN 16550  |  "
-              "BFD Enabled (failover < 5 seconds)  |  "
-              "MED-based primary/backup routing"),
-             font_size=12, font_color=DARK_BLUE, bold=True, alignment=PP_ALIGN.CENTER)
+    # 1. Genesys ORS
+    add_shape_box(slide, Inches(0.3), y_top, Inches(1.6), box_h,
+                  GREEN, "Genesys ORS", font_size=10, font_color=WHITE, bold=True)
 
-print("Slide 4: Interconnect Design - Done")
+    # 2. DC Router
+    add_shape_box(slide, Inches(2.3), Inches(2.6), Inches(1.3), Inches(0.8),
+                  DARK_GRAY, "DC Router", font_size=9, font_color=WHITE, bold=True)
 
+    # 3. Dedicated Interconnect
+    add_shape_box(slide, Inches(4.0), Inches(2.5), Inches(2.0), Inches(1.0),
+                  DARK_BLUE, "Dedicated\nInterconnect", font_size=9, font_color=WHITE, bold=True,
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(4.0), Inches(3.5), Inches(2.0), Inches(0.4),
+                 "10G | VLAN 200 | < 2ms", font_size=7, font_color=DARK_BLUE, bold=False, alignment=PP_ALIGN.CENTER)
 
+    # 4. Cloud Router
+    add_shape_box(slide, Inches(6.4), Inches(2.5), Inches(1.5), box_h,
+                  GCP_BLUE, "Cloud Router", font_size=9, font_color=WHITE, bold=True)
 
-# ============================================================
-# SLIDE 5: Voice Path
-# ============================================================
-slide5 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide5, WHITE)
-add_slide_title(slide5, "Voice Path: On-Prem SBC → GCP CCAI → Genesys Agent")
+    # 5. Private Service Connect
+    add_shape_box(slide, Inches(8.2), Inches(2.5), Inches(1.7), box_h,
+                  GCP_BLUE, "Private Service\nConnect", font_size=9, font_color=WHITE, bold=True)
 
-# Flow boxes
-flow_items = [
-    ("PSTN\nInbound", DARK_GRAY, 0.3),
-    ("Oracle\nSBC", MEDIUM_BLUE, 2.0),
-    ("Dedicated\nInterconnect", DARK_GRAY, 3.7),
-    ("GCP\nGTP/LB", GCP_BLUE, 5.5),
-    ("Dialogflow\nCX (CCAI)", GCP_BLUE, 7.3),
-    ("Return via\nInterconnect", DARK_GRAY, 9.2),
-    ("Genesys\nAgent", GREEN, 11.0),
-]
+    # 6. Cloud Run Middleware
+    add_shape_box(slide, Inches(10.2), Inches(2.5), Inches(1.8), box_h,
+                  GCP_GREEN, "Cloud Run\nMiddleware", font_size=9, font_color=WHITE, bold=True)
 
-for label, color, x in flow_items:
-    add_colored_box(slide5, Inches(x), Inches(2.0), Inches(1.6), Inches(1.0),
-                    color, label, font_size=10, font_color=WHITE, bold=True)
+    # Connectors (blue data path)
+    add_connector(slide, Inches(1.9), Inches(3.0), Inches(2.3), Inches(3.0), LIGHT_BLUE, Pt(2.5))
+    add_connector(slide, Inches(3.6), Inches(3.0), Inches(4.0), Inches(3.0), LIGHT_BLUE, Pt(2.5))
+    add_connector(slide, Inches(6.0), Inches(3.0), Inches(6.4), Inches(3.0), LIGHT_BLUE, Pt(2.5))
+    add_connector(slide, Inches(7.9), Inches(3.0), Inches(8.2), Inches(3.0), LIGHT_BLUE, Pt(2.5))
+    add_connector(slide, Inches(9.9), Inches(3.0), Inches(10.2), Inches(3.0), LIGHT_BLUE, Pt(2.5))
 
-# Arrows between boxes (text-based)
-arrow_y = 2.3
-for i in range(len(flow_items) - 1):
-    x_start = flow_items[i][2] + 1.6
-    add_text_box(slide5, Inches(x_start), Inches(arrow_y), Inches(0.4), Inches(0.4),
-                 "→", font_size=18, font_color=ORANGE, bold=True)
+    # Fan out from Cloud Run to 3 services
+    fan_y = Inches(4.3)
+    # Firestore
+    add_shape_box(slide, Inches(9.2), fan_y, Inches(1.3), Inches(0.7),
+                  GCP_GREEN, "Firestore", font_size=8, font_color=WHITE, bold=True)
+    # BigQuery
+    add_shape_box(slide, Inches(10.6), fan_y, Inches(1.3), Inches(0.7),
+                  GCP_GREEN, "BigQuery", font_size=8, font_color=WHITE, bold=True)
+    # Pub/Sub
+    add_shape_box(slide, Inches(12.0), fan_y, Inches(1.1), Inches(0.7),
+                  GCP_GREEN, "Pub/Sub", font_size=8, font_color=WHITE, bold=True)
 
-# Key specifications
-specs_text = ("Key Voice Path Specifications:\n\n"
-              "• Protocol: SIP over TLS (Port 5061)\n"
-              "• Media: SRTP (encrypted RTP)\n"
-              "• Codec: G.711 μ-law (64 kbps)\n"
-              "• Target Latency: < 80ms one-way\n"
-              "• QoS: DSCP EF (46) for voice packets\n"
-              "• Capacity: 500 concurrent sessions per SBC pair")
-add_text_box(slide5, Inches(0.5), Inches(3.5), Inches(6.0), Inches(3.5),
-             specs_text, font_size=12, font_color=DARK_GRAY)
+    # Fan-out connectors
+    add_connector(slide, Inches(11.1), Inches(3.5), Inches(9.85), fan_y, GCP_GREEN, Pt(1.5))
+    add_connector(slide, Inches(11.1), Inches(3.5), Inches(11.25), fan_y, GCP_GREEN, Pt(1.5))
+    add_connector(slide, Inches(11.1), Inches(3.5), Inches(12.55), fan_y, GCP_GREEN, Pt(1.5))
 
-# Voice quality box
-add_colored_box(slide5, Inches(7.0), Inches(3.8), Inches(5.8), Inches(2.5),
-                LIGHT_GRAY, "", border_color=ORANGE)
-add_text_box(slide5, Inches(7.3), Inches(3.9), Inches(5.3), Inches(0.4),
-             "Voice Quality Requirements", font_size=14, font_color=ORANGE, bold=True)
-add_text_box(slide5, Inches(7.3), Inches(4.4), Inches(5.3), Inches(1.8),
-             ("• MOS Score: > 4.0 target\n"
-              "• Jitter: < 30ms\n"
-              "• Packet Loss: < 1%\n"
-              "• One-way Delay: < 80ms\n"
-              "• Echo Cancellation: Enabled on SBC"),
-             font_size=12, font_color=DARK_GRAY)
+    # Key callout box
+    add_shape_box(slide, Inches(1.0), Inches(5.5), Inches(11.3), Inches(1.0),
+                  RGBColor(0xE8, 0xF5, 0xE9), "", border_color=GREEN, border_width=Pt(2),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    add_text_box(slide, Inches(1.3), Inches(5.7), Inches(10.8), Inches(0.7),
+                 "All Private - No Public IPs | Private Google Access | < 50ms Round-Trip",
+                 font_size=14, font_color=GREEN, bold=True, alignment=PP_ALIGN.CENTER)
 
-print("Slide 5: Voice Path - Done")
+    return slide
 
 
 
 # ============================================================
-# SLIDE 6: Data Path
+# SLIDE 5: GCP VPC & Security Architecture
 # ============================================================
-slide6 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide6, WHITE)
-add_slide_title(slide6, "Data Path: Genesys ORS → GCP Middleware (Private)")
+def create_slide_5(prs):
+    """GCP VPC Architecture & Security Controls (Visio-style)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
 
-# Flow boxes for data path
-data_flow = [
-    ("Genesys\nORS", GREEN, 0.5),
-    ("Interconnect\n(data-vlan)", DARK_GRAY, 2.8),
-    ("Private Service\nConnect", GCP_BLUE, 5.1),
-    ("Cloud Run\nMiddleware", GCP_BLUE, 7.4),
-    ("Firestore /\nBigQuery", GCP_BLUE, 9.8),
-]
+    # Title bar
+    add_shape_box(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.7),
+                  DARK_BLUE, "GCP VPC Architecture & Security Controls",
+                  font_size=18, font_color=WHITE, bold=True)
 
-for label, color, x in data_flow:
-    add_colored_box(slide6, Inches(x), Inches(1.8), Inches(2.0), Inches(1.0),
-                    color, label, font_size=10, font_color=WHITE, bold=True)
+    # VPC Service Controls Perimeter (RED dashed outer border)
+    perimeter = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                       Inches(0.2), Inches(0.9), Inches(10.0), Inches(6.0))
+    perimeter.fill.background()
+    perimeter.line.color.rgb = RED
+    perimeter.line.width = Pt(2.5)
+    perimeter.line.dash_style = 4  # dash
 
-# Arrows
-for i in range(len(data_flow) - 1):
-    x_start = data_flow[i][2] + 2.0
-    add_text_box(slide6, Inches(x_start), Inches(2.0), Inches(0.8), Inches(0.5),
-                 "──▶", font_size=14, font_color=LIGHT_BLUE, bold=True)
+    add_text_box(slide, Inches(0.4), Inches(0.95), Inches(4.0), Inches(0.3),
+                 "VPC Service Controls Perimeter", font_size=9, font_color=RED, bold=True)
 
-# Key points
-key_points = ("Key Data Path Characteristics:\n\n"
-              "• No Public IP addresses - fully private\n"
-              "• Private Service Connect endpoint for GCP services\n"
-              "• mTLS authentication between services\n"
-              "• Target latency: < 50ms round-trip\n"
-              "• VLAN 200 (data) separated from voice traffic\n"
-              "• Cloud Armor WAF for API protection")
-add_text_box(slide6, Inches(0.5), Inches(3.3), Inches(6.0), Inches(3.5),
-             key_points, font_size=12, font_color=DARK_GRAY)
+    # VPC Box inside perimeter
+    vpc = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                  Inches(0.5), Inches(1.4), Inches(9.4), Inches(4.5))
+    vpc.fill.solid()
+    vpc.fill.fore_color.rgb = LIGHT_GRAY
+    vpc.line.color.rgb = MEDIUM_BLUE
+    vpc.line.width = Pt(2)
 
-# Data flow details box
-add_colored_box(slide6, Inches(7.0), Inches(3.5), Inches(5.8), Inches(3.0),
-                LIGHT_GRAY, "", border_color=LIGHT_BLUE)
-add_text_box(slide6, Inches(7.3), Inches(3.6), Inches(5.3), Inches(0.4),
-             "Data Integration Patterns", font_size=14, font_color=MEDIUM_BLUE, bold=True)
-add_text_box(slide6, Inches(7.3), Inches(4.1), Inches(5.3), Inches(2.2),
-             ("• Screen Pop: ORS → Cloud Run → Agent Desktop\n"
-              "  (Customer context in < 200ms)\n\n"
-              "• Post-Call: Recording → GCS → BigQuery\n"
-              "  (Analytics pipeline)\n\n"
-              "• Real-time: CCAI hints → Genesys routing\n"
-              "  (Intent-based call routing)"),
-             font_size=11, font_color=DARK_GRAY)
+    add_text_box(slide, Inches(0.7), Inches(1.45), Inches(5.0), Inches(0.35),
+                 "contact-center-vpc (Global)", font_size=11, font_color=MEDIUM_BLUE, bold=True)
 
-print("Slide 6: Data Path - Done")
+    # 3 Subnet boxes side by side
+    subnet_y = Inches(2.0)
+    subnet_h = Inches(2.5)
+    subnet_w = Inches(2.8)
 
+    # Voice Subnet
+    add_shape_box(slide, Inches(0.8), subnet_y, subnet_w, subnet_h,
+                  RGBColor(0xFF, 0xF0, 0xE0), "", border_color=ORANGE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    voice_lines = [
+        "voice-subnet",
+        "10.100.0.0/24",
+        "",
+        "\u2022 GTP Endpoints",
+        "\u2022 SBC Landing"
+    ]
+    add_multiline_textbox(slide, Inches(0.9), Inches(2.1), Inches(2.6), Inches(2.3),
+                          voice_lines, font_size=9, font_color=DARK_GRAY, bold=False)
 
+    # Data Subnet
+    add_shape_box(slide, Inches(3.8), subnet_y, subnet_w, subnet_h,
+                  RGBColor(0xE0, 0xF0, 0xFF), "", border_color=LIGHT_BLUE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    data_lines = [
+        "data-subnet",
+        "10.101.0.0/24",
+        "",
+        "\u2022 Cloud Run",
+        "\u2022 PSC Endpoints"
+    ]
+    add_multiline_textbox(slide, Inches(3.9), Inches(2.1), Inches(2.6), Inches(2.3),
+                          data_lines, font_size=9, font_color=DARK_GRAY, bold=False)
 
-# ============================================================
-# SLIDE 7: VPC & Security
-# ============================================================
-slide7 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide7, WHITE)
-add_slide_title(slide7, "GCP VPC Design & VPC Service Controls")
+    # CCAI Subnet
+    add_shape_box(slide, Inches(6.8), subnet_y, subnet_w, subnet_h,
+                  RGBColor(0xE8, 0xF0, 0xFE), "", border_color=GCP_BLUE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    ccai_lines = [
+        "ccai-subnet",
+        "10.102.0.0/24",
+        "",
+        "\u2022 Dialogflow CX",
+        "\u2022 STT/TTS"
+    ]
+    add_multiline_textbox(slide, Inches(6.9), Inches(2.1), Inches(2.6), Inches(2.3),
+                          ccai_lines, font_size=9, font_color=DARK_GRAY, bold=False)
 
-# VPC Service Controls Perimeter (outer box)
-add_colored_box(slide7, Inches(0.3), Inches(1.3), Inches(8.5), Inches(5.8),
-                WHITE, "", border_color=RGBColor(0xCC, 0x00, 0x00))
-add_text_box(slide7, Inches(0.5), Inches(1.4), Inches(4.0), Inches(0.4),
-             "VPC Service Controls Perimeter", font_size=12, font_color=RGBColor(0xCC, 0x00, 0x00), bold=True)
+    # DR replicas (smaller, grayed)
+    dr_y = Inches(4.7)
+    add_shape_box(slide, Inches(0.8), dr_y, Inches(9.0), Inches(0.7),
+                  RGBColor(0xDD, 0xDD, 0xDD), "us-central1 DR replicas (standby)",
+                  font_size=9, font_color=DARK_GRAY, bold=False,
+                  border_color=RGBColor(0xBB, 0xBB, 0xBB), border_width=Pt(1))
 
-# VPC Box
-add_colored_box(slide7, Inches(0.6), Inches(1.9), Inches(8.0), Inches(4.9),
-                LIGHT_GRAY, "", border_color=MEDIUM_BLUE)
-add_text_box(slide7, Inches(0.8), Inches(2.0), Inches(3.0), Inches(0.4),
-             "VPC: ccai-prod-vpc", font_size=13, font_color=MEDIUM_BLUE, bold=True)
+    # Interconnect entry point at bottom
+    add_shape_box(slide, Inches(2.5), Inches(5.8), Inches(2.5), Inches(0.7),
+                  GCP_BLUE, "Cloud Router\n(Interconnect Entry)", font_size=8, font_color=WHITE, bold=True)
 
-# Subnets
-subnets = [
-    ("voice-subnet\n10.100.0.0/24", ORANGE, 1.0, 2.6),
-    ("data-subnet\n10.101.0.0/24", LIGHT_BLUE, 3.6, 2.6),
-    ("ccai-subnet\n10.102.0.0/24", GCP_BLUE, 6.2, 2.6),
-]
-for label, color, x, y in subnets:
-    add_colored_box(slide7, Inches(x), Inches(y), Inches(2.3), Inches(1.0),
-                    color, label, font_size=11, font_color=WHITE, bold=True)
+    # Lines from Cloud Router to subnets
+    add_connector(slide, Inches(3.75), Inches(5.8), Inches(2.2), Inches(4.5), LIGHT_BLUE, Pt(1.5))
+    add_connector(slide, Inches(3.75), Inches(5.8), Inches(5.2), Inches(4.5), LIGHT_BLUE, Pt(1.5))
+    add_connector(slide, Inches(3.75), Inches(5.8), Inches(8.2), Inches(4.5), LIGHT_BLUE, Pt(1.5))
 
-# Services in subnets
-add_text_box(slide7, Inches(1.0), Inches(3.8), Inches(2.3), Inches(1.5),
-             "• SBC Landing\n• Voice GW\n• RTP Processing",
-             font_size=9, font_color=DARK_GRAY)
-add_text_box(slide7, Inches(3.6), Inches(3.8), Inches(2.3), Inches(1.5),
-             "• Cloud Run\n• API Gateway\n• PSC Endpoints",
-             font_size=9, font_color=DARK_GRAY)
-add_text_box(slide7, Inches(6.2), Inches(3.8), Inches(2.3), Inches(1.5),
-             "• Dialogflow CX\n• STT/TTS\n• Firestore",
-             font_size=9, font_color=DARK_GRAY)
+    # ---- Security Panel (right side) ----
+    add_shape_box(slide, Inches(10.5), Inches(1.0), Inches(2.6), Inches(5.5),
+                  RGBColor(0xFD, 0xF0, 0xF0), "", border_color=RED, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.ROUNDED_RECTANGLE)
+    add_text_box(slide, Inches(10.6), Inches(1.1), Inches(2.4), Inches(0.35),
+                 "Security Controls", font_size=10, font_color=RED, bold=True, alignment=PP_ALIGN.CENTER)
 
-# Firewall rules summary
-add_text_box(slide7, Inches(0.8), Inches(5.5), Inches(7.5), Inches(1.0),
-             "Firewall: Deny-all default | Allow voice: TCP 5061, UDP 16384-32767 | Allow data: TCP 443 only",
-             font_size=10, font_color=DARK_GRAY)
+    security_items = [
+        "\u2713 Private Google Access",
+        "\u2713 No Public IPs",
+        "\u2713 Cloud Armor WAF",
+        "\u2713 Audit Logging",
+        "\u2713 CMEK Encryption",
+        "\u2713 VPC Svc Controls",
+        "\u2713 IAM Least Privilege",
+    ]
+    add_multiline_textbox(slide, Inches(10.7), Inches(1.6), Inches(2.3), Inches(4.5),
+                          security_items, font_size=9, font_color=DARK_GRAY, bold=False)
 
-# Security features (right panel)
-add_colored_box(slide7, Inches(9.0), Inches(1.3), Inches(4.0), Inches(5.8),
-                DARK_BLUE, "", border_color=DARK_BLUE)
-add_text_box(slide7, Inches(9.2), Inches(1.5), Inches(3.6), Inches(0.4),
-             "Security Controls", font_size=14, font_color=WHITE, bold=True)
-security_items = ("✓ Private Google Access\n\n"
-                  "✓ No Public IP addresses\n\n"
-                  "✓ VPC Service Controls\n\n"
-                  "✓ Cloud Armor WAF\n\n"
-                  "✓ mTLS service mesh\n\n"
-                  "✓ CMEK encryption\n\n"
-                  "✓ Cloud Audit Logs\n\n"
-                  "✓ DLP API integration")
-add_text_box(slide7, Inches(9.2), Inches(2.1), Inches(3.6), Inches(4.8),
-             security_items, font_size=12, font_color=WHITE)
-
-print("Slide 7: VPC & Security - Done")
-
-
-
-# ============================================================
-# SLIDE 8: Latency Analysis
-# ============================================================
-slide8 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide8, WHITE)
-add_slide_title(slide8, "Latency Budget: Voice Path (< 80ms Target)")
-
-# Latency segments
-segments = [
-    ("DC → Equinix", "< 1ms", 0.8, MEDIUM_BLUE),
-    ("Equinix → GCP Edge", "1-2ms", 1.6, DARK_GRAY),
-    ("GCP Internal Routing", "1-2ms", 2.4, GCP_BLUE),
-    ("CCAI Processing", "50-100ms", 3.2, ORANGE),
-    ("Return Path (GCP → DC)", "3-5ms", 4.0, MEDIUM_BLUE),
-]
-
-# Header
-add_text_box(slide8, Inches(0.5), Inches(1.3), Inches(4.0), Inches(0.4),
-             "Segment", font_size=13, font_color=DARK_BLUE, bold=True)
-add_text_box(slide8, Inches(4.5), Inches(1.3), Inches(2.0), Inches(0.4),
-             "Latency", font_size=13, font_color=DARK_BLUE, bold=True)
-add_text_box(slide8, Inches(6.5), Inches(1.3), Inches(6.0), Inches(0.4),
-             "Visual Budget", font_size=13, font_color=DARK_BLUE, bold=True)
-
-for label, latency, y, color in segments:
-    add_text_box(slide8, Inches(0.5), Inches(y), Inches(4.0), Inches(0.5),
-                 label, font_size=12, font_color=DARK_GRAY)
-    add_text_box(slide8, Inches(4.5), Inches(y), Inches(2.0), Inches(0.5),
-                 latency, font_size=12, font_color=DARK_GRAY, bold=True)
-    # Bar chart representation
-    if "50-100" in latency:
-        bar_width = 5.5
-    elif "3-5" in latency:
-        bar_width = 0.8
-    elif "1-2" in latency:
-        bar_width = 0.4
-    else:
-        bar_width = 0.2
-    bar = slide8.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE, Inches(6.5), Inches(y + 0.1), Inches(bar_width), Inches(0.3)
-    )
-    bar.fill.solid()
-    bar.fill.fore_color.rgb = color
-    bar.line.fill.background()
-
-# Total line
-add_text_box(slide8, Inches(0.5), Inches(5.0), Inches(4.0), Inches(0.5),
-             "TOTAL (Typical)", font_size=14, font_color=DARK_BLUE, bold=True)
-add_text_box(slide8, Inches(4.5), Inches(5.0), Inches(2.0), Inches(0.5),
-             "60-80ms", font_size=14, font_color=DARK_BLUE, bold=True)
-
-# Status badge
-add_colored_box(slide8, Inches(6.5), Inches(4.9), Inches(3.0), Inches(0.6),
-                GREEN, "✓ WITHIN TARGET", font_size=14, font_color=WHITE, bold=True)
-
-# Notes
-add_text_box(slide8, Inches(0.5), Inches(5.8), Inches(12.0), Inches(1.5),
-             ("Notes:\n"
-              "• CCAI processing is the dominant factor (50-100ms depending on complexity)\n"
-              "• Network transport adds only 5-10ms total (benefit of Dedicated Interconnect)\n"
-              "• Worst case with DR failover to us-central1: adds 15-20ms (still within 150ms budget)"),
-             font_size=11, font_color=DARK_GRAY)
-
-print("Slide 8: Latency Analysis - Done")
+    return slide
 
 
 
 # ============================================================
-# SLIDE 9: HA & Failover
+# SLIDE 6: High Availability & Failover Diagram
 # ============================================================
-slide9 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide9, WHITE)
-add_slide_title(slide9, "High Availability & Disaster Recovery")
+def create_slide_6(prs):
+    """High Availability: 99.99% SLA Design (Visio-style)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, WHITE)
 
-# 4 HA Layers
-layers = [
-    ("Layer 1: SBC HA", "< 3 seconds", "Active/Standby SBC pair\nAutomatic session preservation",
-     MEDIUM_BLUE, 1.4),
-    ("Layer 2: Interconnect", "< 5 seconds", "4x 10G links (2 per metro)\nBFD detection + BGP re-route",
-     DARK_GRAY, 2.8),
-    ("Layer 3: Geographic DR", "< 30 seconds", "Dallas → Phoenix failover\nDNS + BGP path change",
-     GCP_BLUE, 4.2),
-    ("Layer 4: GCP Region", "< 30 seconds", "us-south1 → us-central1\nCross-region load balancing",
-     ORANGE, 5.6),
-]
+    # Title bar
+    add_shape_box(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.7),
+                  DARK_BLUE, "High Availability: 99.99% SLA Design",
+                  font_size=18, font_color=WHITE, bold=True)
 
-for title, rto, description, color, y in layers:
-    # Layer title box
-    add_colored_box(slide9, Inches(0.5), Inches(y), Inches(3.0), Inches(1.0),
-                    color, title, font_size=12, font_color=WHITE, bold=True)
-    # RTO badge
-    add_colored_box(slide9, Inches(3.8), Inches(y + 0.15), Inches(1.8), Inches(0.7),
-                    GREEN, rto, font_size=12, font_color=WHITE, bold=True)
-    # Description
-    add_text_box(slide9, Inches(6.0), Inches(y), Inches(5.5), Inches(1.0),
-                 description, font_size=11, font_color=DARK_GRAY)
+    # 2x2 Grid layout
+    quad_w = Inches(6.2)
+    quad_h = Inches(3.1)
 
-# Overall SLA box
-add_colored_box(slide9, Inches(9.5), Inches(1.3), Inches(3.5), Inches(0.6),
-                DARK_BLUE, "Combined SLA: 99.99%", font_size=13, font_color=WHITE, bold=True)
+    # ---- TOP-LEFT: Normal Operation ----
+    tl_x = Inches(0.2)
+    tl_y = Inches(0.9)
+    add_shape_box(slide, tl_x, tl_y, quad_w, quad_h,
+                  RGBColor(0xF0, 0xFD, 0xF0), "", border_color=GREEN, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(0.4), Inches(1.0), Inches(3.0), Inches(0.3),
+                 "Normal Operation", font_size=11, font_color=GREEN, bold=True)
 
-# Failover summary
-add_text_box(slide9, Inches(0.5), Inches(6.8), Inches(12.5), Inches(0.5),
-             "Zero single points of failure: Dual DC | Dual ISP | Dual GCP Region | Dual SBC",
-             font_size=12, font_color=DARK_BLUE, bold=True, alignment=PP_ALIGN.CENTER)
+    # Dallas DC
+    add_shape_box(slide, Inches(0.5), Inches(1.5), Inches(1.3), Inches(0.6),
+                  DARK_BLUE, "Dallas DC", font_size=8, font_color=WHITE, bold=True)
+    # DA7 (primary - green)
+    add_shape_box(slide, Inches(2.2), Inches(1.5), Inches(1.2), Inches(0.6),
+                  GREEN, "DA7 \u2713", font_size=8, font_color=WHITE, bold=True)
+    # GCP
+    add_shape_box(slide, Inches(4.0), Inches(1.5), Inches(2.0), Inches(0.6),
+                  GCP_BLUE, "GCP us-south1", font_size=8, font_color=WHITE, bold=True)
+    add_connector(slide, Inches(1.8), Inches(1.8), Inches(2.2), Inches(1.8), GREEN, Pt(2))
+    add_connector(slide, Inches(3.4), Inches(1.8), Inches(4.0), Inches(1.8), GREEN, Pt(2))
 
-print("Slide 9: HA & Failover - Done")
+    # DA2 (standby - gray)
+    add_shape_box(slide, Inches(2.2), Inches(2.5), Inches(1.2), Inches(0.6),
+                  RGBColor(0xBB, 0xBB, 0xBB), "DA2 (stby)", font_size=8, font_color=WHITE, bold=False)
+    add_connector(slide, Inches(1.8), Inches(2.1), Inches(2.2), Inches(2.8), RGBColor(0xBB, 0xBB, 0xBB), Pt(1))
+
+    # ---- TOP-RIGHT: Single Link Failure ----
+    tr_x = Inches(6.8)
+    tr_y = Inches(0.9)
+    add_shape_box(slide, tr_x, tr_y, quad_w, quad_h,
+                  RGBColor(0xFF, 0xF8, 0xF0), "", border_color=ORANGE, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(7.0), Inches(1.0), Inches(4.0), Inches(0.3),
+                 "Single Link Failure (< 1 sec)", font_size=11, font_color=ORANGE, bold=True)
+
+    # Dallas DC
+    add_shape_box(slide, Inches(7.1), Inches(1.5), Inches(1.3), Inches(0.6),
+                  DARK_BLUE, "Dallas DC", font_size=8, font_color=WHITE, bold=True)
+    # DA7 (failed - red X)
+    add_shape_box(slide, Inches(8.8), Inches(1.5), Inches(1.2), Inches(0.6),
+                  RED, "DA7 \u2717", font_size=8, font_color=WHITE, bold=True)
+    # DA2 (active - green)
+    add_shape_box(slide, Inches(8.8), Inches(2.5), Inches(1.2), Inches(0.6),
+                  GREEN, "DA2 \u2713", font_size=8, font_color=WHITE, bold=True)
+    # GCP
+    add_shape_box(slide, Inches(10.6), Inches(2.0), Inches(2.0), Inches(0.6),
+                  GCP_BLUE, "GCP us-south1", font_size=8, font_color=WHITE, bold=True)
+
+    add_connector(slide, Inches(8.4), Inches(1.8), Inches(8.8), Inches(1.8), RED, Pt(2))
+    add_connector(slide, Inches(8.4), Inches(2.1), Inches(8.8), Inches(2.8), GREEN, Pt(2))
+    add_connector(slide, Inches(10.0), Inches(2.8), Inches(10.6), Inches(2.3), GREEN, Pt(2))
+
+    # ---- BOTTOM-LEFT: Metro Failure ----
+    bl_x = Inches(0.2)
+    bl_y = Inches(4.2)
+    add_shape_box(slide, bl_x, bl_y, quad_w, quad_h,
+                  RGBColor(0xFF, 0xF0, 0xF0), "", border_color=RED, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(0.4), Inches(4.3), Inches(4.0), Inches(0.3),
+                 "Metro Failure (< 30 sec)", font_size=11, font_color=RED, bold=True)
+
+    # Dallas DC (failed)
+    add_shape_box(slide, Inches(0.5), Inches(4.8), Inches(1.3), Inches(0.6),
+                  RED, "Dallas \u2717", font_size=8, font_color=WHITE, bold=True)
+    # WAN
+    add_shape_box(slide, Inches(2.1), Inches(5.0), Inches(0.8), Inches(0.5),
+                  DARK_GRAY, "WAN", font_size=7, font_color=WHITE, bold=True)
+    # Phoenix DC
+    add_shape_box(slide, Inches(3.1), Inches(4.8), Inches(1.3), Inches(0.6),
+                  DARK_BLUE, "Phoenix DC", font_size=8, font_color=WHITE, bold=True)
+    # PH1
+    add_shape_box(slide, Inches(4.7), Inches(4.8), Inches(0.8), Inches(0.6),
+                  GREEN, "PH1", font_size=8, font_color=WHITE, bold=True)
+    # GCP DR
+    add_shape_box(slide, Inches(5.6), Inches(4.8), Inches(0.7), Inches(0.6),
+                  GCP_GREEN, "DR", font_size=8, font_color=WHITE, bold=True)
+
+    add_connector(slide, Inches(1.8), Inches(5.1), Inches(2.1), Inches(5.2), DARK_GRAY, Pt(1.5))
+    add_connector(slide, Inches(2.9), Inches(5.2), Inches(3.1), Inches(5.1), GREEN, Pt(2))
+    add_connector(slide, Inches(4.4), Inches(5.1), Inches(4.7), Inches(5.1), GREEN, Pt(2))
+    add_connector(slide, Inches(5.5), Inches(5.1), Inches(5.6), Inches(5.1), GREEN, Pt(2))
+
+    add_text_box(slide, Inches(0.5), Inches(5.6), Inches(5.5), Inches(0.3),
+                 "Dallas DC \u2192 WAN \u2192 Phoenix DC \u2192 PH1 \u2192 GCP us-central1",
+                 font_size=7, font_color=DARK_GRAY, bold=False)
+
+    # ---- BOTTOM-RIGHT: GCP Region Failure ----
+    br_x = Inches(6.8)
+    br_y = Inches(4.2)
+    add_shape_box(slide, br_x, br_y, quad_w, quad_h,
+                  RGBColor(0xFF, 0xF0, 0xF0), "", border_color=RED, border_width=Pt(1.5),
+                  shape_type=MSO_SHAPE.RECTANGLE)
+    add_text_box(slide, Inches(7.0), Inches(4.3), Inches(4.5), Inches(0.3),
+                 "GCP Region Failure (< 30 sec)", font_size=11, font_color=RED, bold=True)
+
+    # Dallas DC
+    add_shape_box(slide, Inches(7.1), Inches(4.8), Inches(1.3), Inches(0.6),
+                  DARK_BLUE, "Dallas DC", font_size=8, font_color=WHITE, bold=True)
+    # DA7
+    add_shape_box(slide, Inches(8.8), Inches(4.8), Inches(1.0), Inches(0.6),
+                  DARK_GRAY, "DA7", font_size=8, font_color=WHITE, bold=True)
+    # GCP us-south1 (failed)
+    add_shape_box(slide, Inches(10.2), Inches(4.8), Inches(2.0), Inches(0.6),
+                  RED, "us-south1 \u2717", font_size=8, font_color=WHITE, bold=True)
+    # GCP us-central1 (active)
+    add_shape_box(slide, Inches(10.2), Inches(5.8), Inches(2.0), Inches(0.6),
+                  GCP_GREEN, "us-central1 \u2713", font_size=8, font_color=WHITE, bold=True)
+
+    add_connector(slide, Inches(8.4), Inches(5.1), Inches(8.8), Inches(5.1), DARK_GRAY, Pt(1.5))
+    add_connector(slide, Inches(9.8), Inches(5.1), Inches(10.2), Inches(5.1), RED, Pt(2))
+    # Redirect arrow down to us-central1
+    add_connector(slide, Inches(9.8), Inches(5.1), Inches(10.2), Inches(6.1), GREEN, Pt(2.5))
+    add_text_box(slide, Inches(7.5), Inches(6.5), Inches(4.5), Inches(0.3),
+                 "Traffic redirects to GCP us-central1", font_size=8, font_color=GREEN, bold=True)
+
+    return slide
 
 
 
 # ============================================================
-# SLIDE 10: Cost & Timeline
+# MAIN: Build Presentation
 # ============================================================
-slide10 = prs.slides.add_slide(prs.slide_layouts[6])
-set_slide_bg(slide10, WHITE)
-add_slide_title(slide10, "Investment & Implementation Timeline")
+def main():
+    """Generate the complete PowerPoint presentation."""
+    prs = Presentation()
 
-# Cost Summary Section
-add_text_box(slide10, Inches(0.5), Inches(1.3), Inches(6.0), Inches(0.5),
-             "Monthly Recurring Cost", font_size=16, font_color=DARK_BLUE, bold=True)
+    # Set widescreen dimensions
+    prs.slide_width = SLIDE_WIDTH
+    prs.slide_height = SLIDE_HEIGHT
 
-cost_items = [
-    ("Dedicated Interconnect (4x 10G)", "$10,953"),
-    ("GCP Services (CCAI, Compute, Storage)", "$4,625"),
-]
+    print("Creating Slide 1: Title...")
+    create_slide_1(prs)
 
-y = 1.9
-for item, cost in cost_items:
-    add_text_box(slide10, Inches(0.8), Inches(y), Inches(4.5), Inches(0.4),
-                 item, font_size=12, font_color=DARK_GRAY)
-    add_text_box(slide10, Inches(5.0), Inches(y), Inches(1.5), Inches(0.4),
-                 cost, font_size=12, font_color=DARK_GRAY, bold=True)
-    y += 0.4
+    print("Creating Slide 2: Physical Network Topology...")
+    create_slide_2(prs)
 
-# Total
-add_colored_box(slide10, Inches(0.5), Inches(2.9), Inches(6.0), Inches(0.6),
-                DARK_BLUE, "  Total Monthly:  ~$15,578/month", font_size=14, font_color=WHITE, bold=True)
+    print("Creating Slide 3: Voice Path Network Diagram...")
+    create_slide_3(prs)
 
-# Timeline Section
-add_text_box(slide10, Inches(0.5), Inches(3.8), Inches(12.0), Inches(0.5),
-             "Implementation Timeline: 12 Weeks", font_size=16, font_color=DARK_BLUE, bold=True)
+    print("Creating Slide 4: Data Path Network Diagram...")
+    create_slide_4(prs)
 
-# Timeline phases as colored bars
-phases = [
-    ("Phase 1: Procurement", "Wk 1-4", "Cross-connects, LOAs, ISP circuits", MEDIUM_BLUE, 0, 4),
-    ("Phase 2: GCP Infra", "Wk 3-6", "VPC, interconnect attach, Cloud Router", GCP_BLUE, 2, 4),
-    ("Phase 3: Security", "Wk 5-7", "VPC-SC, firewall rules, mTLS, testing", ORANGE, 4, 3),
-    ("Phase 4: Go-Live", "Wk 9-12", "Integration test, cutover, monitoring", GREEN, 8, 4),
-]
+    print("Creating Slide 5: GCP VPC & Security Architecture...")
+    create_slide_5(prs)
 
-bar_top = 4.5
-for phase_name, weeks, desc, color, start_wk, duration_wk in phases:
-    # Phase label
-    add_text_box(slide10, Inches(0.5), Inches(bar_top), Inches(2.5), Inches(0.4),
-                 phase_name, font_size=11, font_color=DARK_GRAY, bold=True)
-    # Timeline bar (scaled: 12 weeks = 8 inches, starting at x=3.5)
-    bar_x = 3.5 + (start_wk * 8.0 / 12.0)
-    bar_w = duration_wk * 8.0 / 12.0
-    add_colored_box(slide10, Inches(bar_x), Inches(bar_top), Inches(bar_w), Inches(0.4),
-                    color, weeks, font_size=9, font_color=WHITE, bold=True)
-    # Description
-    add_text_box(slide10, Inches(bar_x), Inches(bar_top + 0.4), Inches(bar_w + 1.0), Inches(0.3),
-                 desc, font_size=8, font_color=DARK_GRAY)
-    bar_top += 0.8
+    print("Creating Slide 6: High Availability & Failover...")
+    create_slide_6(prs)
 
-# Week markers
-add_text_box(slide10, Inches(3.5), Inches(7.0), Inches(8.0), Inches(0.3),
-             "Wk1    Wk2    Wk3    Wk4    Wk5    Wk6    Wk7    Wk8    Wk9    Wk10   Wk11   Wk12",
-             font_size=8, font_color=DARK_GRAY, alignment=PP_ALIGN.LEFT)
+    # Save
+    prs.save(OUTPUT_PATH)
+    print(f"\nPresentation saved to: {OUTPUT_PATH}")
+    print(f"Total slides: {len(prs.slides)}")
 
-print("Slide 10: Cost & Timeline - Done")
 
-# ============================================================
-# SAVE PRESENTATION
-# ============================================================
-output_dir = os.path.dirname(os.path.abspath(__file__))
-output_path = os.path.join(output_dir, "Five9_Genesys_Bridge_Executive_v1.pptx")
-prs.save(output_path)
-print(f"\n{'='*60}")
-print(f"Presentation saved successfully!")
-print(f"Output: {output_path}")
-print(f"Slides: {len(prs.slides)} slides")
-print(f"Size: {prs.slide_width} x {prs.slide_height}")
-print(f"{'='*60}")
+if __name__ == "__main__":
+    main()
